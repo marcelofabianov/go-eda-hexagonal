@@ -98,15 +98,3 @@ Para colocar o projeto RedToGreen em funcionamento no seu ambiente de desenvolvi
     * Para visualizar os traces desta requisição, acesse o [Jaeger UI](http://localhost:16686) e selecione o serviço `redtogreen-api`.
 
 ---
-
-## 🤝 Contribuindo
-
-Seja bem-vindo para contribuir com o RedToGreen! Por favor, consulte os documentos de `ADRs` e `Glossário` para entender as decisões arquiteturais e o vocabulário do projeto.
-
----
-
-## 📄 Licença
-
-Este projeto está licenciado sob a licença [MIT](LICENSE).
-
----
