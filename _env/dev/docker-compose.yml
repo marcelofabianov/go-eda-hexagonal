@@ -1,0 +1,198 @@
+name: "redtogreen"
+
+services:
+  redtogreen-api:
+    container_name: redtogreen-api
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+    environment:
+      # --- APP CONFIG ---
+      APP_ENV: ${APP_ENV:-development}
+      APP_TZ: ${APP_TZ:-America/Sao_Paulo}
+      APP_VERSION: ${APP_VERSION:-0.0.1}
+      # --- LOG CONFIG ---
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      # --- USER CONFIG ---
+      APP_UID: ${APP_UID:-1000}
+      APP_GID: ${APP_GID:-1000}
+      # --- API CONFIG ---
+      APP_API_PORT: ${APP_API_PORT:-8080}
+      APP_API_HOST: ${APP_API_HOST:-0.0.0.0}
+      APP_API_RATE_LIMIT: ${APP_API_RATE_LIMIT:-30}
+      # --- DATABASE CONFIG ---
+      APP_DB_DRIVER: ${APP_DB_DRIVER:-postgres}
+      APP_DB_HOST: redtogreen-db
+      APP_DB_PORT: ${APP_DB_PORT:-5432}
+      APP_DB_USER: ${APP_DB_USER:-username}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-password}
+      APP_DB_NAME: ${APP_DB_NAME:-redtogreen-db}
+      APP_DB_SSL_MODE: ${APP_DB_SSL_MODE:-disable}
+      # --- AUDIT DATABASE CONFIG ---
+      APP_AUDIT_DB_DRIVER: ${APP_AUDIT_DB_DRIVER:-postgres}
+      APP_AUDIT_DB_HOST: redtogreen-audit-db
+      APP_AUDIT_DB_PORT: ${APP_AUDIT_DB_PORT:-5433}
+      APP_AUDIT_DB_USER: ${APP_AUDIT_DB_USER:-audituser}
+      APP_AUDIT_DB_PASSWORD: ${APP_AUDIT_DB_PASSWORD:-auditpass}
+      APP_AUDIT_DB_NAME: ${APP_AUDIT_DB_NAME:-redtogreen-audit-db}
+      APP_AUDIT_DB_SSL_MODE: ${APP_AUDIT_DB_SSL_MODE:-disable}
+      # --- NATS Config ---
+      APP_NATS_URLS: ${APP_NATS_URLS:-nats-0:4222,nats-1:4222,nats-2:4222}
+      # --- GOOSE Config ---
+      GOOSE_DRIVER: ${GOOSE_DRIVER:-postgres}
+      GOOSE_MIGRATION_DIR: ${GOOSE_MIGRATION_DIR:-/app/db/migrations}
+      GOOSE_DBSTRING: "postgres://${APP_DB_USER:-username}:${APP_DB_PASSWORD:-password}@${APP_DB_HOST:-redtogreen-db}:${APP_DB_PORT:-5432}/${APP_DB_NAME:-redtogreen-db}?sslmode=${APP_DB_SSL_MODE:-disable}"
+    ports:
+      - "8080:${APP_API_PORT:-8080}"
+      - "8000:8000"
+    depends_on:
+      redtogreen-db:
+        condition: service_healthy
+      redtogreen-audit-db:
+        condition: service_healthy
+      nats-0:
+        condition: service_started
+      nats-1:
+        condition: service_started
+      nats-2:
+        condition: service_started
+    networks:
+      - redtogreen-network
+    working_dir: /app
+    volumes:
+      - .:/app
+
+  redtogreen-db:
+    container_name: redtogreen-db
+    restart: always
+    image: "postgres:17-alpine"
+    ports:
+      - "5454:${APP_DB_PORT:-5432}"
+    environment:
+      POSTGRES_USER: ${APP_DB_USER:-username}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-password}
+      POSTGRES_DB: ${APP_DB_NAME:-redtogreen-db}
+    volumes:
+      - redtogreen-data:/var/lib/postgresql/data:rw
+    networks:
+      - redtogreen-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "sh -c 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redtogreen-audit-db:
+    container_name: redtogreen-audit-db
+    restart: always
+    image: "postgres:17-alpine"
+    ports:
+      - "5455:${APP_AUDIT_DB_PORT:-5433}"
+    environment:
+      POSTGRES_USER: ${APP_AUDIT_DB_USER:-audituser}
+      POSTGRES_PASSWORD: ${APP_AUDIT_DB_PASSWORD:-auditpass}
+      POSTGRES_DB: ${APP_AUDIT_DB_NAME:-redtogreen-audit-db}
+      PGPORT: ${APP_AUDIT_DB_PORT:-5433}
+    volumes:
+      - redtogreen-audit-data:/var/lib/postgresql/data:rw
+    networks:
+      - redtogreen-network
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats-0:
+    container_name: nats-0
+    image: nats:latest
+    ports:
+      - "4222:4222"  # Porta de cliente
+      - "8222:8222"  # Monitoramento HTTP
+    command: >-
+      --server_name n1
+      --cluster_name NATS
+      --cluster nats://0.0.0.0:6222
+      --http_port 8222
+      --jetstream
+      --store_dir /data/nats
+      --routes=nats://ruser:T0pS3cr3t@nats-1:6222,nats://ruser:T0pS3cr3t@nats-2:6222
+    volumes:
+      - nats-0-data:/data/nats
+    networks:
+      - redtogreen-network
+
+  nats-1:
+    container_name: nats-1
+    image: nats:latest
+    ports:
+      - "4223:4222"
+    command: >-
+      --server_name n2
+      --cluster_name NATS
+      --cluster nats://0.0.0.0:6222
+      --jetstream
+      --store_dir /data/nats
+      --routes=nats://ruser:T0pS3cr3t@nats-0:6222,nats://ruser:T0pS3cr3t@nats-2:6222
+    volumes:
+      - nats-1-data:/data/nats
+    networks:
+      - redtogreen-network
+
+  nats-2:
+    container_name: nats-2
+    image: nats:latest
+    ports:
+      - "4224:4222"
+    command: >-
+      --server_name n3
+      --cluster_name NATS
+      --cluster nats://0.0.0.0:6222
+      --jetstream
+      --store_dir /data/nats
+      --routes=nats://ruser:T0pS3cr3t@nats-0:6222,nats://ruser:T0pS3cr3t@nats-1:6222
+    volumes:
+      - nats-2-data:/data/nats
+    networks:
+      - redtogreen-network
+
+  jaeger:
+    container_name: jaeger
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "4317:4317"
+      - "16686:16686" # Client
+      - "14268:14268"
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+    networks:
+      - redtogreen-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:14268/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redtogreen-data:
+    driver: local
+  redtogreen-audit-data:
+    driver: local
+  nats-0-data:
+    driver: local
+  nats-1-data:
+    driver: local
+  nats-2-data:
+    driver: local
+
+networks:
+  redtogreen-network:
+    driver: bridge

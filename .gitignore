@@ -1,0 +1,66 @@
+# Binaries for programs and scripts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.sh
+*.bat
+*.cmd
+
+# Temporary files
+.DS_Store
+*.swp
+*.swop
+*.swo
+
+# Log files
+*.log
+
+# Database files
+*.db
+*.sqlite
+
+# Config files
+*.cfg
+
+# Cache files
+*.cache
+
+# Compiled files
+*.class
+
+# Temporary files from various tools
+*.tmp
+
+# Certificate files
+*.cer
+*.crt
+*.pem
+*.p12
+*.pfx
+*.pass
+
+# Environment variables file
+.env
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE configuration files
+.idea/
+.vscode/
+
+# Alias
+!.project_aliases.example.sh
+
+# Docker
+/docker-compose.yml
+/Dockerfile
